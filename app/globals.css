@@ -32,3 +32,36 @@
 @media(max-width:440px){.readonly-grid .teams-grid{grid-template-columns:1fr}.import-row{grid-template-columns:1fr}.wide-dialog,.standard-dialog{padding:22px!important}.status-notice{font-size:13px}.toolbar-actions{gap:3px}.board-footer{flex-wrap:wrap}}
 @media print{.site-header,.page-heading,.control-panel,.site-footer,.toolbar-actions,.board-subtoolbar>div,.score-buttons,.board-footer,.status-notice,.exit-presentation,.share-banner{display:none!important}.work-grid{display:block}.workspace{max-width:none;padding:0}.results-panel{border:0}.teams-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}.team-card{break-inside:avoid}.team-score{background:white}.results-toolbar{display:none}.presenting .team-members>div{font-size:14px}}
 
+
+/* Weekly personal gradebook */
+.assignment-bar{display:flex;align-items:end;gap:12px;flex-wrap:wrap;padding:17px 23px;background:#f8faff;border-bottom:1px solid #e8eef8}
+.assignment-bar>.choice-field{width:250px;max-width:100%;font-size:12px;gap:7px}
+.assignment-bar .choice-trigger{background:white!important;font-size:14px!important}
+.assignment-actions{display:flex;align-items:center;gap:4px}
+.assignment-actions>button{min-height:40px;font-size:13px}
+.assignment-bar>p{width:100%;font-size:12px;color:#8190a7;margin:1px 0 0;line-height:1.7}
+.gradebook-grid{grid-template-columns:minmax(0,1fr)}.gradebook-grid>.control-panel{display:none}
+.gradebook{padding:25px 24px 16px;min-width:0}
+.gradebook-heading{display:flex;align-items:start;justify-content:space-between;gap:20px;margin-bottom:22px}
+.gradebook-heading h2{margin:0 0 8px;font-size:21px;font-weight:650}
+.gradebook-heading p{margin:0;color:#7c8ba3;font-size:14px;line-height:1.8}
+.gradebook-heading>span{font-size:12px;color:#8191ac;white-space:nowrap;margin-top:6px}
+.gradebook-table{border:1px solid #e3eaf6;border-radius:10px;overflow:hidden}
+.gradebook-table [data-slot=table-container]{max-height:65vh;overflow:auto}
+.gradebook-table table{min-width:100%;width:max-content;font-size:14px}
+.gradebook-table th{background:#f4f7fc;min-width:132px;height:62px;white-space:normal;max-width:230px;padding:12px 18px;text-align:center;color:#60728f;position:sticky;top:0;z-index:2}
+.gradebook-table th small{display:block;font-size:10px;color:#6486d5;margin-top:4px}
+.gradebook-table td{height:53px;padding:12px 18px;text-align:center;font-variant-numeric:tabular-nums}
+.gradebook-table .student-column{position:sticky;left:0;z-index:1;min-width:110px;background:#fff;font-weight:600;text-align:left;border-right:1px solid #e8edf5}
+.gradebook-table th.student-column{background:#f4f7fc;z-index:3}
+.gradebook-table .selected-assignment{background:#f2f6ff;color:#315fe9}
+.gradebook-table th.selected-assignment{background:#e9f0ff}
+.grade-cell strong{font-weight:650;font-size:16px}.ungraded{color:#aab6c8}.average-cell{font-weight:650;color:#324e7f}
+.gradebook-legend{display:flex;flex-wrap:wrap;justify-content:space-between;gap:10px;font-size:12px;color:#8593aa;padding:17px 2px 0;line-height:1.8}
+.gradebook-empty{min-height:320px;padding:30px 18px}.gradebook-empty>button{margin-top:24px}
+.real-tabs{gap:18px!important}.real-tabs [data-slot=tabs-trigger]{white-space:nowrap}
+.results-toolbar{gap:16px}.team-score small{font-size:11px}
+@media(max-width:900px){.results-toolbar{align-items:start}.real-tabs{gap:16px!important}.real-tabs [data-slot=tabs-trigger]{font-size:13px}.toolbar-actions{margin-left:auto}.gradebook-heading{flex-direction:column;gap:9px}.gradebook{padding:22px 18px}}
+@media(max-width:480px){.results-toolbar{padding:14px 16px}.real-tabs{width:100%!important;gap:17px!important;justify-content:start!important}.real-tabs [data-slot=tabs-trigger]{font-size:12px;flex:initial}.real-tabs [data-slot=tabs-trigger] svg{width:14px;height:14px}.toolbar-actions{margin-left:auto}.assignment-bar{padding:16px}.assignment-bar>.choice-field{width:100%}.gradebook{padding:20px 12px}.gradebook-table td,.gradebook-table th{padding:10px 12px;min-width:110px}.gradebook-table .student-column{min-width:90px}.gradebook-heading h2{font-size:19px}}
+@media print{.assignment-bar{background:white}.assignment-actions{display:none}.gradebook-table [data-slot=table-container]{max-height:none;overflow:visible}.gradebook-table th,.gradebook-table .student-column{position:static}}
+

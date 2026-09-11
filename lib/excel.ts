@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx';
-import { ranking, type Classroom } from './classroom.ts';
+import { activeAssignment, ranking, studentSummary, type Classroom } from './classroom.ts';
 
 export function readWorkbook(data: ArrayBuffer, filename: string): XLSX.WorkBook {
   if (!/\.(xlsx|xls|csv)$/i.test(filename)) throw new Error('请选择 .xlsx、.xls 或 .csv 文件。');
@@ -24,12 +24,20 @@ export function sheetRows(book: XLSX.WorkBook, name: string): string[][] {
 
 export function workbookFromClassroom(state: Classroom): XLSX.WorkBook {
   const book = XLSX.utils.book_new();
-  const ranks = ranking(state.teams);
-  const summary = [['排名','队伍','人数','课堂积分','成员'],...ranks.map(t=>[t.rank,t.name,t.members.length,t.score,t.members.map(s=>s.name).join('、')])];
-  const details: (string | number)[][] = [['队伍','姓名','学号','小队积分']];
-  state.teams.forEach(t=>t.members.forEach(s=>details.push([t.name,s.name,s.number,t.score])));
-  const history: (string | number)[][] = [['时间','队伍','分数变化','备注'],...state.history.map(h=>[new Date(h.time).toLocaleString('zh-CN',{hour12:false}),h.teamName,h.delta,h.note])];
-  for (const [name, rows, widths] of [ ['积分排行',summary,[10,18,10,14,60]], ['分组明细',details,[18,18,22,14]], ['计分记录',history,[25,18,14,45]]] as const) {
+  const assignment = activeAssignment(state);
+  const ranks = ranking(assignment.teams.filter(t => t.graded));
+  type Cell = string | number | null;
+  const personal: Cell[][] = [['学号 / 编号','姓名', ...state.assignments.map(a => a.name), '已评次数','平均分']];
+  state.students.forEach(student => {
+    const summary = studentSummary(state, student.id);
+    personal.push([student.number || student.id.replace('student-', '#'), student.name, ...state.assignments.map(a => a.grades[student.id] ?? null), summary.count, summary.average]);
+  });
+  const summary: Cell[][] = [['排名','队伍','人数','作业成绩','成员'],...ranks.map(t=>[t.rank,t.name,t.members.length,t.score,t.members.map(s=>s.name).join('、')])];
+  const details: Cell[][] = [['作业','队伍','姓名','学号 / 编号','个人成绩']];
+  state.assignments.forEach(a => a.teams.forEach(t=>t.members.forEach(s=>details.push([a.name,t.name,s.name,s.number || s.id.replace('student-', '#'),a.grades[s.id] ?? null]))));
+  const history: Cell[][] = [['作业','时间','队伍','分数变化','备注'],...state.assignments.flatMap(a => a.history.map(h=>[a.name,new Date(h.time).toLocaleString('zh-CN',{hour12:false}),h.teamName,h.delta,h.note]))];
+  const sheets: [string, Cell[][], number[]][] = [['个人每周成绩',personal,[20,18,...state.assignments.map(() => 20),12,12]], ['当前作业队伍排行',summary,[10,18,10,14,60]], ['分组明细',details,[22,18,18,22,14]], ['计分记录',history,[22,25,18,14,45]]];
+  for (const [name, rows, widths] of sheets) {
     const sheet = XLSX.utils.aoa_to_sheet(rows.map(r=>[...r]));
     sheet['!cols'] = widths.map(w=>({wch:w}));
     sheet['!autofilter'] = {ref: sheet['!ref'] || 'A1'};
@@ -39,9 +47,9 @@ export function workbookFromClassroom(state: Classroom): XLSX.WorkBook {
 }
 
 export function downloadResults(state: Classroom) {
-  if (!state.teams.length) throw new Error('请先生成队伍。');
+  if (!state.students.length) throw new Error('请先导入学生名单。');
   const title = state.title.replace(/[\\/:*?"<>|]/g,'_') || '课堂';
-  XLSX.writeFile(workbookFromClassroom(state),`${title}_分队与评分_${new Date().toISOString().slice(0,10)}.xlsx`);
+  XLSX.writeFile(workbookFromClassroom(state),`${title}_个人每周成绩_${new Date().toISOString().slice(0,10)}.xlsx`);
 }
 
 export function downloadTemplate() {
