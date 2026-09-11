@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { WorkBook } from 'xlsx';
-import { Shuffle, Upload, Users, Download, Plus, Minus, Check, LayoutGrid, Trophy, FileSpreadsheet, Undo2, RotateCcw, Share2, Expand, X, PencilLine, LoaderCircle, List, Trash2, History, CloudUpload } from 'lucide-react';
+import { Shuffle, Upload, Users, Download, Plus, Minus, Check, LayoutGrid, FileSpreadsheet, Undo2, RotateCcw, Share2, Expand, X, PencilLine, LoaderCircle, List, Trash2, History, CloudUpload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/compone
 import { AlertDialog, AlertDialogContent, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogAction, AlertDialogCancel } from '@/components/ui/alert-dialog';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
-import { activeAssignment, addAssignment, clearAssignmentScores, regroupClassroom, renameAssignment, selectAssignment, setTeamScore, studentSummary, addScore, demoNames, emptyClassroom, inferColumns, ranking, rosterFromRows, teamSizes, undoScore, type Classroom, type Student } from '@/lib/classroom';
+import { activeAssignment, addAssignment, clearAssignmentScores, regroupClassroom, renameAssignment, selectAssignment, setTeamScore, studentSummary, addScore, demoNames, emptyClassroom, inferColumns, rosterFromRows, teamSizes, undoScore, type Classroom, type Student } from '@/lib/classroom';
 
 type ImportData = { book: WorkBook; file: string; sheet: string; rows: string[][]; options: ReturnType<typeof inferColumns> };
 type Confirm = { message: string; action: () => void };
@@ -82,7 +82,6 @@ export default function Home({initialState,readOnly,headerActions,status,onDraft
   },[ready,readOnly,commit]);
 
   const sizes=teamSizes(state.students.length,state.size,state.balanced);
-  const ranks=useMemo(()=>ranking(assignment.teams.filter(t=>t.graded)),[assignment.teams]);
   const duplicateNames=useMemo(()=>new Set(state.students.filter((s,i,all)=>all.findIndex(n=>n.name===s.name)!==i).map(s=>s.name)),[state.students]);
   const preview=useMemo(()=>{
     if(!importData)return null;
@@ -164,7 +163,7 @@ export default function Home({initialState,readOnly,headerActions,status,onDraft
           </section>
         </aside>}
         <section className="results-panel"><Tabs value={tab} onValueChange={value=>setTab(String(value))} className="board-tabs">
-          <div className="results-toolbar"><TabsList variant="line" className="real-tabs"><TabsTrigger value="board"><LayoutGrid size={17}/> 分队看板</TabsTrigger><TabsTrigger value="grades"><FileSpreadsheet size={17}/> 个人成绩表</TabsTrigger><TabsTrigger value="ranking"><Trophy size={17}/> 本周排行</TabsTrigger></TabsList><div className="toolbar-actions"><Button variant="ghost" className="icon-button" aria-label={presenting?'退出投屏模式':'进入投屏模式'} title={presenting?'退出投屏':'投屏模式'} onClick={()=>setPresenting(!presenting)}>{presenting?<X size={18}/>:<Expand size={18}/>}</Button><Button variant="outline" className="export-button" disabled={!state.students.length} onClick={()=>void excelAction()}><Download size={15}/> 导出</Button></div></div>
+          <div className="results-toolbar"><TabsList variant="line" className="real-tabs"><TabsTrigger value="board"><LayoutGrid size={17}/> 分队看板</TabsTrigger><TabsTrigger value="grades"><FileSpreadsheet size={17}/> 个人成绩表</TabsTrigger></TabsList><div className="toolbar-actions"><Button variant="ghost" className="icon-button" aria-label={presenting?'退出投屏模式':'进入投屏模式'} title={presenting?'退出投屏':'投屏模式'} onClick={()=>setPresenting(!presenting)}>{presenting?<X size={18}/>:<Expand size={18}/>}</Button><Button variant="outline" className="export-button" disabled={!state.students.length} onClick={()=>void excelAction()}><Download size={15}/> 导出</Button></div></div>
           <div className="assignment-bar"><Choice label={readOnly?'查看作业':'当前评分作业'} value={state.activeAssignmentId} options={state.assignments.map(a=>({value:a.id,label:a.name}))} onChange={id=>{const next=selectAssignment(current.current,id);if(readOnly){current.current=next;setState(next)}else commit(next)}}/><div className="assignment-actions">{!readOnly&&<><Button variant="outline" onClick={()=>{setAssignmentNameInput('第'+(state.assignments.length+1)+'周作业');openDialog('assignment')}}><Plus size={15}/> 添加作业</Button><Button variant="ghost" aria-label="修改作业名称" title="修改作业名称" onClick={()=>{setAssignmentNameInput(assignment.name);openDialog('rename-assignment')}}><PencilLine size={16}/></Button></>}</div></div>
           {!!assignment.teams.length&&<div className="board-subtoolbar"><span><b>{state.title||'我的课堂'}</b><span className="board-meta">{assignment.teams.length} 支队伍 · {state.students.length} 位同学</span></span><div>{!readOnly&&<><button onClick={()=>{commit(undoScore(current.current));setNotice('已撤销上一次计分。')}} disabled={!assignment.history.length} title="撤销上一次计分"><Undo2 size={14}/> 撤销</button><button onClick={()=>requestChange(()=>commit(clearAssignmentScores(current.current)),'清除本次作业的全部成绩和计分记录？其他周保留。')} title="清除本次作业成绩"><RotateCcw size={14}/> 清零</button></>}<button onClick={()=>void share()}><Share2 size={14}/> 分享</button></div></div>}
           <TabsContent value="board">
@@ -180,7 +179,6 @@ export default function Home({initialState,readOnly,headerActions,status,onDraft
               {state.students.length?<><div className="gradebook-table"><Table><TableHeader><TableRow><TableHead className="student-column">姓名</TableHead><TableHead>学号 / 编号</TableHead>{state.assignments.map(a=><TableHead key={a.id} className={a.id===state.activeAssignmentId?'selected-assignment':''}>{a.name}{a.id===state.activeAssignmentId&&<small>当前评分</small>}</TableHead>)}<TableHead>已评次数</TableHead><TableHead>平均分</TableHead></TableRow></TableHeader><TableBody>{state.students.map(student=>{const summary=studentSummary(state,student.id);return <TableRow key={student.id}><TableCell className="student-column">{student.name}</TableCell><TableCell>{student.number||student.id.replace('student-','#')}</TableCell>{state.assignments.map(a=><TableCell key={a.id} className={'grade-cell'+(a.id===state.activeAssignmentId?' selected-assignment':'')}>{Object.hasOwn(a.grades,student.id)?<strong>{a.grades[student.id]}</strong>:<span className="ungraded" aria-label="未评分">—</span>}</TableCell>)}<TableCell>{summary.count}</TableCell><TableCell className="average-cell">{summary.average??'—'}</TableCell></TableRow>})}</TableBody></Table></div><div className="gradebook-legend"><span>— 未评分；平均分仅计已评分作业。</span></div></>:<div className="empty-board gradebook-empty"><FileSpreadsheet size={40} className="muted-icon"/><h2>暂无学生名单</h2>{!readOnly&&<Button variant="outline" onClick={()=>setTab('board')}>导入名单</Button>}</div>}
             </section>
           </TabsContent>
-          <TabsContent value="ranking">{ranks.length?<div className="ranking-view">{ranks.map(team=><div className={'rank-row'+(team.rank===1?' first-place':'')} key={team.id}><span className="rank-number">{team.rank===1?<Trophy size={21}/>:String(team.rank).padStart(2,'0')}</span><div><strong>{team.name}</strong><p>{team.members.map(s=>s.name+(duplicateNames.has(s.name)?'（'+displayNumber(s)+'）':'')).join('、')}</p></div><span className="rank-score">{team.score}<small> 分</small></span></div>)}</div>:<div className="empty-board"><Trophy size={42} className="muted-icon"/><h2>暂无评分</h2></div>}</TabsContent>
         </Tabs>
         <div className="board-footer"><span><Check size={14}/>{'已评分 '+Object.keys(assignment.grades).length+'/'+state.students.length+' 人'}</span>{assignment.history.length?<button onClick={()=>openDialog('history')}><History size={14}/> 计分记录 ({assignment.history.length})</button>:null}</div>
         </section>
