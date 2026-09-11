@@ -65,3 +65,15 @@
 @media(max-width:480px){.results-toolbar{padding:14px 16px}.real-tabs{width:100%!important;gap:17px!important;justify-content:start!important}.real-tabs [data-slot=tabs-trigger]{font-size:12px;flex:initial}.real-tabs [data-slot=tabs-trigger] svg{width:14px;height:14px}.toolbar-actions{margin-left:auto}.assignment-bar{padding:16px}.assignment-bar>.choice-field{width:100%}.gradebook{padding:20px 12px}.gradebook-table td,.gradebook-table th{padding:10px 12px;min-width:110px}.gradebook-table .student-column{min-width:90px}.gradebook-heading h2{font-size:19px}}
 @media print{.assignment-bar{background:white}.assignment-actions{display:none}.gradebook-table [data-slot=table-container]{max-height:none;overflow:visible}.gradebook-table th,.gradebook-table .student-column{position:static}}
 
+/* Compact course workspace */
+.site-header{height:76px}
+.brand h1{margin:0;font-size:21px;line-height:1.4;font-weight:650;letter-spacing:.5px}
+.workspace{padding-top:26px}
+.empty-board{min-height:360px;padding:36px 20px}
+.empty-board h2{font-size:18px;font-weight:500;color:#72839c;margin:8px 0}
+.empty-symbol{margin-bottom:18px}
+.gradebook-heading{margin-bottom:16px}
+.gradebook-heading>span{margin-top:0}
+.assignment-bar{align-items:end}
+@media(max-width:760px){.site-header{height:68px}.brand h1{font-size:19px}.workspace{padding-top:20px}.site-header .outline-button{height:34px!important;padding:0 10px!important;font-size:12px!important}}
+
