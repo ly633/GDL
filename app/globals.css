@@ -66,6 +66,17 @@
 @media print{.assignment-bar{background:white}.assignment-actions{display:none}.gradebook-table [data-slot=table-container]{max-height:none;overflow:visible}.gradebook-table th,.gradebook-table .student-column{position:static}}
 
 /* Compact course workspace */
+.header-actions{display:flex;align-items:center;gap:10px;flex-shrink:0}
+.publish-button{height:40px!important;background:#315fe9!important;color:white!important;padding:0 18px!important;border-radius:8px!important;font-size:14px!important;gap:7px!important}
+.teacher-label{color:#78879c;font-size:12px;white-space:nowrap}
+.publication-bar{display:flex;align-items:center;gap:9px;flex-wrap:wrap;color:#687e9f;font-size:13px;line-height:1.7;margin:0 0 20px;padding:0 2px}
+.publication-bar>svg{flex-shrink:0}.publication-bar a{margin-left:auto;color:#315fe9;text-decoration:none}.error-banner a{color:inherit;text-decoration:underline}
+.public-loading{min-height:350px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;color:#788ba6}
+.login-steps{list-style:decimal;padding-left:20px;margin:0;color:#64738d;font-size:13px;line-height:1.9}.login-steps li+li{margin-top:7px}.login-steps a{color:#315fe9;text-decoration:underline}.login-steps b{font-weight:600}
+.login-form{display:flex;flex-direction:column;gap:18px}.version-choice{display:grid;gap:7px;padding:17px;background:#f5f8fc;border-radius:8px;font-size:13px;color:#788aa4}.version-choice strong{color:#3f5677}.version-choice strong:not(:first-child){margin-top:12px}
+.demo-link{color:#8394b0;font-size:12px;background:none;border:0;padding:6px 0;margin-top:8px}
+@media(max-width:600px){.site-header{gap:12px;flex-wrap:wrap;height:auto!important;min-height:68px;padding:14px 16px}.site-header .brand h1{font-size:17px}.site-header .brand{gap:8px}.site-header .brand-mark{width:32px;height:32px;border-radius:9px}.header-actions{gap:7px;margin-left:auto}.teacher-label{display:none}.publish-button{height:34px!important;padding:0 12px!important;font-size:13px!important}.publication-bar{font-size:12px}}
+@media print{.publication-bar{display:none!important}}
 .site-header{height:76px}
 .brand h1{margin:0;font-size:21px;line-height:1.4;font-weight:650;letter-spacing:.5px}
 .workspace{padding-top:26px}

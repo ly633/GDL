@@ -1,8 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { WorkBook } from 'xlsx';
-import { Shuffle, Upload, Users, Download, ArrowUpRight, Plus, Minus, Check, LayoutGrid, Trophy, FileSpreadsheet, Undo2, RotateCcw, Share2, Expand, X, PencilLine, LoaderCircle, List, LockKeyhole, Trash2, History } from 'lucide-react';
+import { Shuffle, Upload, Users, Download, Plus, Minus, Check, LayoutGrid, Trophy, FileSpreadsheet, Undo2, RotateCcw, Share2, Expand, X, PencilLine, LoaderCircle, List, Trash2, History, CloudUpload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/compone
 import { AlertDialog, AlertDialogContent, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogAction, AlertDialogCancel } from '@/components/ui/alert-dialog';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
-import { activeAssignment, addAssignment, clearAssignmentScores, regroupClassroom, renameAssignment, selectAssignment, setTeamScore, studentSummary, addScore, decodeSnapshot, demoNames, emptyClassroom, encodeSnapshot, inferColumns, ranking, rosterFromRows, STORAGE_KEY, teamSizes, undoScore, validateClassroom, type Classroom, type Student } from '@/lib/classroom';
+import { activeAssignment, addAssignment, clearAssignmentScores, regroupClassroom, renameAssignment, selectAssignment, setTeamScore, studentSummary, addScore, demoNames, emptyClassroom, inferColumns, ranking, rosterFromRows, teamSizes, undoScore, type Classroom, type Student } from '@/lib/classroom';
 
 type ImportData = { book: WorkBook; file: string; sheet: string; rows: string[][]; options: ReturnType<typeof inferColumns> };
 type Confirm = { message: string; action: () => void };
@@ -21,26 +21,22 @@ function Choice({label,value,options,onChange}:{label:string;value:string;option
   return <label className="choice-field" htmlFor={id}><span>{label}</span><Select value={value} onValueChange={v=>{if(v!==null)onChange(v)}}><SelectTrigger id={id} className="choice-trigger" aria-label={label}><SelectValue>{options.find(o=>o.value===value)?.label || '请选择'}</SelectValue></SelectTrigger><SelectContent>{options.map(o=><SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectContent></Select></label>;
 }
 function errorMessage(error: unknown) { return error instanceof Error ? error.message : '操作未完成，请重试。'; }
-function readInitial() {
-  const initial={state:emptyClassroom(),readOnly:false,notice:'',saveError:''};
-  if(window.location.hash.startsWith('#result=')) {
-    try {initial.state=decodeSnapshot(window.location.hash.slice(8));initial.readOnly=true;return initial;}
-    catch(error){initial.notice=errorMessage(error);}
-  }
-  try {const saved=localStorage.getItem(STORAGE_KEY);if(saved)initial.state=validateClassroom(JSON.parse(saved));}
-  catch {initial.saveError='无法读取本地记录，请及时导出成绩。';}
-  return initial;
-}
-
-export default function Home() {
-  const [initial] = useState(readInitial);
-  const [state,setState] = useState<Classroom>(initial.state);
+type HomeProps = {
+  initialState: Classroom;
+  readOnly: boolean;
+  headerActions: ReactNode;
+  status: ReactNode;
+  onDraftChange?: (state: Classroom) => string;
+  onPublish?: (state: Classroom) => void;
+  publishing?: boolean;
+};
+export default function Home({initialState,readOnly,headerActions,status,onDraftChange,onPublish,publishing=false}: HomeProps) {
+  const [state,setState] = useState<Classroom>(initialState);
   const current = useRef(state);
   const assignment = activeAssignment(state);
   const ready = true;
-  const readOnly = initial.readOnly;
-  const [notice,setNotice] = useState(initial.notice);
-  const [saveError,setSaveError] = useState(initial.saveError);
+  const [notice,setNotice] = useState('');
+  const [saveError,setSaveError] = useState('');
   const [tab,setTab] = useState('board');
   const [presenting,setPresenting] = useState(false);
   const [busy,setBusy] = useState(false);
@@ -59,9 +55,8 @@ export default function Home() {
   const commit = useCallback((next: Classroom) => {
     if(readOnly)return;
     current.current=next;setState(next);
-    try {localStorage.setItem(STORAGE_KEY,JSON.stringify(next));setSaveError('');}
-    catch {setSaveError('无法保存记录，请导出 Excel。');}
-  },[readOnly]);
+    setSaveError(onDraftChange?.(next) ?? '');
+  },[readOnly,onDraftChange]);
   useEffect(()=>{if(!notice)return;const timer=setTimeout(()=>setNotice(''),6500);return ()=>clearTimeout(timer)},[notice]);
   useEffect(()=>{
     const onKey=(event:KeyboardEvent)=>{if(event.key==='Escape')setPresenting(false)};
@@ -131,8 +126,7 @@ export default function Home() {
   }
   async function share() {
     try{
-      const encoded=encodeSnapshot(current.current);
-      const url=new URL(window.location.href);url.hash='result='+encoded;
+      const url=new URL(window.location.href);url.hash='';url.search='';
       setShareURL(url.toString());openDialog('share');
     }catch(error){setNotice(errorMessage(error))}
   }
@@ -144,9 +138,9 @@ export default function Home() {
   const scoreTarget=assignment.teams.find(t=>t.id===scoreTeam);
 
   return <div className={'app-shell'+(presenting?' presenting':'')}>
-    <header className="site-header"><a className="brand" href="./"><span className="brand-mark"><Shuffle size={23}/></span><h1>几何深度学习</h1></a>{!readOnly&&<Button variant="outline" className="outline-button" disabled={!ready} onClick={()=>replaceRoster(demoNames.map((name,i)=>({id:'student-'+(i+1),name,number:String(i+1).padStart(3,'0')})),'示例名单（18 人）')}>示例名单</Button>}</header>
+    <header className="site-header"><a className="brand" href="./"><span className="brand-mark"><Shuffle size={23}/></span><h1>几何深度学习</h1></a><div className="header-actions">{!readOnly&&<Button className="publish-button" disabled={publishing} onClick={()=>onPublish?.(current.current)}>{publishing?<LoaderCircle size={16} className="spin"/>:<CloudUpload size={16}/>} 发布</Button>}{headerActions}</div></header>
     <main className="workspace">
-      {readOnly&&<div className="share-banner"><LockKeyhole size={17}/><span>只读快照，不实时同步。</span><a href={typeof window!=='undefined'?window.location.pathname:'./'}>新建课堂 <ArrowUpRight size={14}/></a></div>}
+      {status}
       {saveError&&<div className="error-banner" role="alert">{saveError}</div>}
       <div className={'work-grid'+(readOnly?' readonly-grid':'')+(tab==='grades'?' gradebook-grid':'')}>
         {!readOnly&&<aside className="control-panel">
@@ -155,6 +149,7 @@ export default function Home() {
             <button className={'dropzone'+(dragging?' dragging':'')} disabled={!ready||busy} onClick={()=>fileInput.current?.click()} onDragOver={e=>{e.preventDefault();setDragging(true)}} onDragLeave={()=>setDragging(false)} onDrop={e=>{e.preventDefault();setDragging(false);const file=e.dataTransfer.files[0];if(file)void handleFile(file)}}>
               <span className="upload-icon">{busy?<LoaderCircle size={25} className="spin"/>:<Upload size={25}/>}</span><strong>{busy?'正在读取名单…':'点击或拖入 Excel 文件'}</strong><span>.xlsx / .xls / .csv · ≤10 MB</span>
             </button><div className="under-upload"><button onClick={()=>void excelAction(true)}><Download size={13}/> 名单模板</button><button onClick={()=>{setManual('');openDialog('manual')}}><PencilLine size={13}/> 粘贴姓名</button></div>
+            {!state.students.length&&<button className="demo-link" onClick={()=>replaceRoster(demoNames.map((name,i)=>({id:'student-'+(i+1),name,number:String(i+1).padStart(3,'0')})),'示例名单（18 人）')}>使用示例名单</button>}
             <button className="roster-summary" disabled={!state.students.length} onClick={()=>openDialog('roster')}><Users size={18}/><span>已导入 <strong>{state.students.length}</strong> 位同学</span>{!!state.students.length&&<List size={17}/>}</button>
             {!!state.students.length&&<div className="name-preview">{state.students.slice(0,6).map(s=><span key={s.id}>{s.name}</span>)}<small title={state.source}>{state.source}</small></div>}
           </section>
@@ -170,19 +165,19 @@ export default function Home() {
         </aside>}
         <section className="results-panel"><Tabs value={tab} onValueChange={value=>setTab(String(value))} className="board-tabs">
           <div className="results-toolbar"><TabsList variant="line" className="real-tabs"><TabsTrigger value="board"><LayoutGrid size={17}/> 分队看板</TabsTrigger><TabsTrigger value="grades"><FileSpreadsheet size={17}/> 个人成绩表</TabsTrigger><TabsTrigger value="ranking"><Trophy size={17}/> 本周排行</TabsTrigger></TabsList><div className="toolbar-actions"><Button variant="ghost" className="icon-button" aria-label={presenting?'退出投屏模式':'进入投屏模式'} title={presenting?'退出投屏':'投屏模式'} onClick={()=>setPresenting(!presenting)}>{presenting?<X size={18}/>:<Expand size={18}/>}</Button><Button variant="outline" className="export-button" disabled={!state.students.length} onClick={()=>void excelAction()}><Download size={15}/> 导出</Button></div></div>
-          <div className="assignment-bar"><Choice label="当前评分作业" value={state.activeAssignmentId} options={state.assignments.map(a=>({value:a.id,label:a.name}))} onChange={id=>{if(!readOnly)commit(selectAssignment(current.current,id))}}/><div className="assignment-actions">{!readOnly&&<><Button variant="outline" onClick={()=>{setAssignmentNameInput('第'+(state.assignments.length+1)+'周作业');openDialog('assignment')}}><Plus size={15}/> 添加作业</Button><Button variant="ghost" aria-label="修改作业名称" title="修改作业名称" onClick={()=>{setAssignmentNameInput(assignment.name);openDialog('rename-assignment')}}><PencilLine size={16}/></Button></>}</div></div>
+          <div className="assignment-bar"><Choice label={readOnly?'查看作业':'当前评分作业'} value={state.activeAssignmentId} options={state.assignments.map(a=>({value:a.id,label:a.name}))} onChange={id=>{const next=selectAssignment(current.current,id);if(readOnly){current.current=next;setState(next)}else commit(next)}}/><div className="assignment-actions">{!readOnly&&<><Button variant="outline" onClick={()=>{setAssignmentNameInput('第'+(state.assignments.length+1)+'周作业');openDialog('assignment')}}><Plus size={15}/> 添加作业</Button><Button variant="ghost" aria-label="修改作业名称" title="修改作业名称" onClick={()=>{setAssignmentNameInput(assignment.name);openDialog('rename-assignment')}}><PencilLine size={16}/></Button></>}</div></div>
           {!!assignment.teams.length&&<div className="board-subtoolbar"><span><b>{state.title||'我的课堂'}</b><span className="board-meta">{assignment.teams.length} 支队伍 · {state.students.length} 位同学</span></span><div>{!readOnly&&<><button onClick={()=>{commit(undoScore(current.current));setNotice('已撤销上一次计分。')}} disabled={!assignment.history.length} title="撤销上一次计分"><Undo2 size={14}/> 撤销</button><button onClick={()=>requestChange(()=>commit(clearAssignmentScores(current.current)),'清除本次作业的全部成绩和计分记录？其他周保留。')} title="清除本次作业成绩"><RotateCcw size={14}/> 清零</button></>}<button onClick={()=>void share()}><Share2 size={14}/> 分享</button></div></div>}
           <TabsContent value="board">
             {assignment.teams.length?<div className="teams-grid">{assignment.teams.map((team,i)=><article className={'team-card tone-'+i%6} key={team.id}>
               <div className="team-heading"><span className="team-number">{String(i+1).padStart(2,'0')}</span><h3>{team.name}</h3><span>{team.members.length} 人</span></div>
               <div className="team-members">{team.members.map(student=><div key={student.id}><span className="avatar">{student.name.slice(-1)}</span><span>{student.name}{displayNumber(student)&&<small>{displayNumber(student)}</small>}</span></div>)}</div>
               <div className="team-score"><span>作业成绩</span><strong aria-live="polite" aria-label={team.name+(team.graded?'成绩 '+team.score:'未评分')}>{team.graded?team.score:'—'}<small>{team.graded?' 分':' 未评分'}</small></strong>{!readOnly&&<div className="score-buttons"><button className="minus-score" aria-label={team.name+'减 1 分'} onClick={()=>changeScore(team.id,-1)}><Minus size={15}/></button><button className="plus-score" aria-label={team.name+'加 1 分'} onClick={()=>changeScore(team.id,1)}><Plus size={15}/></button><button className="custom-score" aria-label={team.name+'填写作业总分'} onClick={()=>{setScoreTeam(team.id);setPoints(team.graded?String(team.score):'');setScoreNote('');openDialog('score')}}><PencilLine size={15}/></button></div>}</div>
-            </article>)}</div>:<div className="empty-board"><div className="empty-symbol"><Users size={38}/><span><Plus size={16}/></span></div><h2>{state.students.length?'点击“随机分队”生成队伍':'请导入学生名单'}</h2></div>}
+            </article>)}</div>:<div className="empty-board"><div className="empty-symbol"><Users size={38}/><span><Plus size={16}/></span></div><h2>{readOnly?'暂无已发布分组':state.students.length?'点击“随机分队”生成队伍':'请导入学生名单'}</h2></div>}
           </TabsContent>
           <TabsContent value="grades">
             <section className="gradebook">
               <div className="gradebook-heading"><span>{state.students.length} 位同学 · {state.assignments.length} 次作业</span></div>
-              {state.students.length?<><div className="gradebook-table"><Table><TableHeader><TableRow><TableHead className="student-column">姓名</TableHead><TableHead>学号 / 编号</TableHead>{state.assignments.map(a=><TableHead key={a.id} className={a.id===state.activeAssignmentId?'selected-assignment':''}>{a.name}{a.id===state.activeAssignmentId&&<small>当前评分</small>}</TableHead>)}<TableHead>已评次数</TableHead><TableHead>平均分</TableHead></TableRow></TableHeader><TableBody>{state.students.map(student=>{const summary=studentSummary(state,student.id);return <TableRow key={student.id}><TableCell className="student-column">{student.name}</TableCell><TableCell>{student.number||student.id.replace('student-','#')}</TableCell>{state.assignments.map(a=><TableCell key={a.id} className={'grade-cell'+(a.id===state.activeAssignmentId?' selected-assignment':'')}>{Object.hasOwn(a.grades,student.id)?<strong>{a.grades[student.id]}</strong>:<span className="ungraded" aria-label="未评分">—</span>}</TableCell>)}<TableCell>{summary.count}</TableCell><TableCell className="average-cell">{summary.average??'—'}</TableCell></TableRow>})}</TableBody></Table></div><div className="gradebook-legend"><span>— 未评分；平均分仅计已评分作业。</span></div></>:<div className="empty-board gradebook-empty"><FileSpreadsheet size={40} className="muted-icon"/><h2>暂无学生名单</h2><Button variant="outline" onClick={()=>setTab('board')}>导入名单</Button></div>}
+              {state.students.length?<><div className="gradebook-table"><Table><TableHeader><TableRow><TableHead className="student-column">姓名</TableHead><TableHead>学号 / 编号</TableHead>{state.assignments.map(a=><TableHead key={a.id} className={a.id===state.activeAssignmentId?'selected-assignment':''}>{a.name}{a.id===state.activeAssignmentId&&<small>当前评分</small>}</TableHead>)}<TableHead>已评次数</TableHead><TableHead>平均分</TableHead></TableRow></TableHeader><TableBody>{state.students.map(student=>{const summary=studentSummary(state,student.id);return <TableRow key={student.id}><TableCell className="student-column">{student.name}</TableCell><TableCell>{student.number||student.id.replace('student-','#')}</TableCell>{state.assignments.map(a=><TableCell key={a.id} className={'grade-cell'+(a.id===state.activeAssignmentId?' selected-assignment':'')}>{Object.hasOwn(a.grades,student.id)?<strong>{a.grades[student.id]}</strong>:<span className="ungraded" aria-label="未评分">—</span>}</TableCell>)}<TableCell>{summary.count}</TableCell><TableCell className="average-cell">{summary.average??'—'}</TableCell></TableRow>})}</TableBody></Table></div><div className="gradebook-legend"><span>— 未评分；平均分仅计已评分作业。</span></div></>:<div className="empty-board gradebook-empty"><FileSpreadsheet size={40} className="muted-icon"/><h2>暂无学生名单</h2>{!readOnly&&<Button variant="outline" onClick={()=>setTab('board')}>导入名单</Button>}</div>}
             </section>
           </TabsContent>
           <TabsContent value="ranking">{ranks.length?<div className="ranking-view">{ranks.map(team=><div className={'rank-row'+(team.rank===1?' first-place':'')} key={team.id}><span className="rank-number">{team.rank===1?<Trophy size={21}/>:String(team.rank).padStart(2,'0')}</span><div><strong>{team.name}</strong><p>{team.members.map(s=>s.name+(duplicateNames.has(s.name)?'（'+displayNumber(s)+'）':'')).join('、')}</p></div><span className="rank-score">{team.score}<small> 分</small></span></div>)}</div>:<div className="empty-board"><Trophy size={42} className="muted-icon"/><h2>暂无评分</h2></div>}</TabsContent>
@@ -208,7 +203,7 @@ export default function Home() {
       {dialog==='roster'&&<><DialogTitle>班级名单 · {state.students.length} 人</DialogTitle><DialogDescription>{state.source}</DialogDescription><div className="roster-list"><Table><TableHeader><TableRow><TableHead>序号</TableHead><TableHead>姓名</TableHead><TableHead>学号 / 记录编号</TableHead></TableRow></TableHeader><TableBody>{state.students.map((s,i)=><TableRow key={s.id}><TableCell>{i+1}</TableCell><TableCell>{s.name}</TableCell><TableCell>{displayNumber(s)||'—'}</TableCell></TableRow>)}</TableBody></Table></div><Button variant="outline" onClick={()=>{setDialog(null);requestChange(()=>commit(emptyClassroom()),'清空名单、分组和全部每周成绩？',true)}}><Trash2 size={16}/> 清空当前课堂</Button></>}
       {dialog==='score'&&<><DialogTitle>{scoreTarget?.name} · 作业评分</DialogTitle><DialogDescription>{assignment.name}：总分同步到每位成员，覆盖本次作业成绩。</DialogDescription><label className="choice-field" htmlFor="score-delta"><span>本次作业总分</span><Input id="score-delta" type="number" step="0.1" min="-1000000" max="1000000" value={points} onChange={e=>setPoints(e.target.value)} placeholder="支持一位小数"/></label><label className="choice-field" htmlFor="score-note"><span>计分备注（可选）</span><Input id="score-note" maxLength={200} value={scoreNote} onChange={e=>setScoreNote(e.target.value)} placeholder="备注"/></label><Button className="primary-button" onClick={()=>{if(changeScore(scoreTeam,Number(points),scoreNote,true))setDialog(null)}}>保存并同步成员成绩</Button></>}
       {dialog==='history'&&<><DialogTitle>计分记录</DialogTitle><DialogDescription>{assignment.name} · 最近 2000 条</DialogDescription><div className="history-list">{[...assignment.history].reverse().map(h=><div className="history-entry" key={h.id}><span><b>{h.teamName}</b><small>{h.note||'课堂计分'} · {new Date(h.time).toLocaleTimeString('zh-CN',{hour12:false})}</small></span><strong className={h.delta>=0?'positive':'negative'}>{h.delta>0?'+':''}{h.delta}</strong></div>)}</div></>}
-      {dialog==='share'&&<><DialogTitle>分享当前作业结果</DialogTitle><DialogDescription>仅分享本次作业的名单和成绩，不实时同步。</DialogDescription><Textarea aria-label="结果分享链接" className="share-url" readOnly value={shareURL} onFocus={e=>e.target.select()} rows={3}/><Button className="primary-button" onClick={()=>void copyShare()}><Share2 size={16}/> 复制结果链接</Button><p className="small-help">链接被截断时，请导出 Excel 分享。</p></>}
+      {dialog==='share'&&<><DialogTitle>分享课堂</DialogTitle><DialogDescription>此网址显示已发布的分组和每周成绩，更新后刷新查看。</DialogDescription><Textarea aria-label="课堂分享链接" className="share-url" readOnly value={shareURL} onFocus={e=>e.target.select()} rows={3}/><Button className="primary-button" onClick={()=>void copyShare()}><Share2 size={16}/> 复制网址</Button></>}
       {dialogError&&<p className="inline-error" role="alert">{dialogError}</p>}
     </DialogContent></Dialog>
   </div>;

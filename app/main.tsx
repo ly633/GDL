@@ -1,5 +1,5 @@
 import { createRoot } from 'react-dom/client';
-import Home from './page';
+import App from './app';
 import './globals.css';
 
-createRoot(document.getElementById('root')!).render(<Home />);
+createRoot(document.getElementById('root')!).render(<App />);
