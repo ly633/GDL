@@ -69,6 +69,7 @@
 .header-actions{display:flex;align-items:center;gap:10px;flex-shrink:0}
 .publish-button{height:40px!important;background:#315fe9!important;color:white!important;padding:0 18px!important;border-radius:8px!important;font-size:14px!important;gap:7px!important}
 .teacher-label{color:#78879c;font-size:12px;white-space:nowrap}
+.password-button{font-size:13px!important;padding:0 8px!important;color:#687e9f!important}
 .publication-bar{display:flex;align-items:center;gap:9px;flex-wrap:wrap;color:#687e9f;font-size:13px;line-height:1.7;margin:0 0 20px;padding:0 2px}
 .publication-bar>svg{flex-shrink:0}.publication-bar a{margin-left:auto;color:#315fe9;text-decoration:none}.error-banner a{color:inherit;text-decoration:underline}
 .public-loading{min-height:350px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;color:#788ba6}

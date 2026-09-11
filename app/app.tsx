@@ -5,11 +5,9 @@ import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogContent, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogAction, AlertDialogCancel } from '@/components/ui/alert-dialog';
 import { decodeSnapshot, emptyClassroom, type Classroom } from '@/lib/classroom';
-import { authenticateTeacher, chooseTeacherDraft, fetchPublishedClassroom, publicClassroom, publishClassroom, saveTeacherDraft, type DraftChoice, type Publication, type TeacherSession } from '@/lib/publishing';
+import { authenticateTeacher, changeTeacherPassword, chooseTeacherDraft, endTeacherSession, fetchPublishedClassroom, publicClassroom, publishClassroom, PublishingError, saveTeacherDraft, setupTeacherPassword, type DraftChoice, type Publication, type TeacherSession } from '@/lib/publishing';
 import Home from './page';
 
-const ACTIONS_URL = 'https://github.com/ly633/GDL/actions/workflows/pages.yml';
-type Deployment = { publicationId: string; started: number };
 function message(error: unknown) { return error instanceof Error ? error.message : '操作未完成，请重试。'; }
 function formatTime(value: string | null) { return value ? new Date(value).toLocaleString('zh-CN', { hour12: false }) : ''; }
 function readLegacyLink() {
@@ -24,10 +22,18 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const loadId = useRef(0);
-  const [loginOpen, setLoginOpen] = useState(false);
+  const [setupToken, setSetupToken] = useState(() => /^#setup=([A-Za-z0-9_-]{43})$/.exec(window.location.hash)?.[1] ?? '');
+  const [loginOpen, setLoginOpen] = useState(!!setupToken);
   const [tokenInput, setTokenInput] = useState('');
   const [loginBusy, setLoginBusy] = useState(false);
   const [loginError, setLoginError] = useState('');
+  const [passwordConfirm, setPasswordConfirm] = useState('');
+  const [passwordDialog, setPasswordDialog] = useState(false);
+  const [oldPassword, setOldPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [newPasswordConfirm, setNewPasswordConfirm] = useState('');
+  const [passwordBusy, setPasswordBusy] = useState(false);
+  const [passwordError, setPasswordError] = useState('');
   const [session, setSession] = useState<TeacherSession | null>(null);
   const [initialDraft, setInitialDraft] = useState<Classroom | null>(null);
   const latestDraft = useRef<Classroom | null>(null);
@@ -38,7 +44,6 @@ export default function App() {
   const [draftChoice, setDraftChoice] = useState<(DraftChoice & { publishedAt: string | null }) | null>(null);
   const [publishTarget, setPublishTarget] = useState<Classroom | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [deployment, setDeployment] = useState<Deployment | null>(null);
   const [publishStatus, setPublishStatus] = useState('');
   const [publishError, setPublishError] = useState('');
   const [needsLogin, setNeedsLogin] = useState(false);
@@ -60,27 +65,7 @@ export default function App() {
     return () => { cancelled = true; };
   }, []);
 
-  useEffect(() => {
-    if (!deployment) return;
-    let cancelled = false;
-    let timer: ReturnType<typeof setTimeout>;
-    async function check() {
-      try {
-        const result = await fetchPublishedClassroom();
-        if (cancelled) return;
-        if (result.publicationId === deployment!.publicationId) {
-          setPublished(result); setLoadError(''); setPublishStatus('发布完成，学生刷新即可查看。'); setDeployment(null); return;
-        }
-      } catch { /* A transient Pages failure does not mean the commit failed. */ }
-      if (cancelled) return;
-      if (Date.now() - deployment!.started >= 180000) {
-        setPublishStatus('已提交，暂未确认部署完成。请查看部署状态。'); setDeployment(null); return;
-      }
-      timer = setTimeout(() => void check(), 10000);
-    }
-    timer = setTimeout(() => void check(), 8000);
-    return () => { cancelled = true; clearTimeout(timer); };
-  }, [deployment]);
+  useEffect(() => { if (setupToken) window.history.replaceState(null, '', window.location.pathname + window.location.search); }, [setupToken]);
 
   const onDraftChange = useCallback((state: Classroom) => {
     latestDraft.current = state; setDirty(true);
@@ -100,56 +85,73 @@ export default function App() {
   }
   async function login() {
     if (loginBusy) return;
+    if (setupToken && tokenInput !== passwordConfirm) { setLoginError('两次输入的密码不一致。'); return; }
     setLoginBusy(true); setLoginError('');
-    const entered = tokenInput; setTokenInput('');
+    const entered = tokenInput; setTokenInput(''); setPasswordConfirm('');
     try {
-      const verified = await authenticateTeacher(entered);
+      const verified = setupToken ? await setupTeacherPassword(entered, setupToken) : await authenticateTeacher(entered);
+      setSetupToken('');
       let choice: DraftChoice;
       try { choice = chooseTeacherDraft(verified.published, verified.sha, localStorage); }
       catch { choice = { draft: verified.published.classroom ?? emptyClassroom(), conflict: false, warning: '无法读取本机草稿，请及时导出 Excel。' }; }
       setLoginOpen(false);
       if (choice.conflict) { pendingSession.current = verified; setDraftChoice({ ...choice, publishedAt: verified.published.publishedAt }); }
       else activateTeacher(verified, choice.draft, choice.warning);
-    } catch (error) { setLoginError(message(error)); }
+    } catch (error) { setLoginError(message(error)); if (error instanceof PublishingError && error.code === 'setup_done') setSetupToken(''); }
     finally { setLoginBusy(false); }
   }
   function logout() {
+    if (session) void endTeacherSession(session).catch(() => {});
     setSession(null); pendingSession.current = null; latestDraft.current = null; setInitialDraft(null);
-    setDraftChoice(null); setTokenInput(''); setPublishTarget(null); setDeployment(null);
+    setDraftChoice(null); setTokenInput(''); setPublishTarget(null);
     setPublishError(''); setPublishStatus(''); setDraftWarning(''); setNeedsLogin(false);
     void refreshPublic();
   }
   async function publish(state: Classroom) {
-    if (!session || submitting || deployment || needsLogin) return;
-    setSubmitting(true); setPublishTarget(null); setPublishError(''); setPublishStatus('正在提交…');
+    if (!session || submitting || needsLogin) return;
+    setSubmitting(true); setPublishTarget(null); setPublishError(''); setPublishStatus('正在发布…');
     try {
       const result = await publishClassroom(session, state);
       setSession({ ...session, sha: result.sha, published: result.publication });
       setDirty(JSON.stringify(latestDraft.current) !== JSON.stringify(state));
       try { if (latestDraft.current) saveTeacherDraft(latestDraft.current, result.sha, localStorage); }
-      catch { setDraftWarning('已提交，但无法保存本机版本标记。下次登录请核对草稿。'); }
-      setPublishStatus('已提交，正在部署…');
-      setDeployment({ publicationId: result.publication.publicationId!, started: Date.now() });
+      catch { setDraftWarning('已发布，但无法保存本机版本标记。下次登录请核对草稿。'); }
+      setPublished(result.publication); setLoadError('');
+      setPublishStatus('已发布，学生刷新即可查看。');
     } catch (error) {
       setPublishStatus(''); setPublishError(message(error)); setNeedsLogin(true);
     } finally { setSubmitting(false); }
   }
 
+  async function updatePassword() {
+    if (!session || passwordBusy) return;
+    if (newPassword !== newPasswordConfirm) { setPasswordError('两次输入的新密码不一致。'); return; }
+    setPasswordBusy(true); setPasswordError('');
+    try {
+      const verified = await changeTeacherPassword(session, oldPassword, newPassword);
+      // Password changes must not silently upgrade a stale draft's publication base.
+      setSession({ ...session, token: verified.token, expiresAt: verified.expiresAt });
+      setPasswordDialog(false); setOldPassword(''); setNewPassword(''); setNewPasswordConfirm('');
+      setPublishStatus('密码已修改，其他设备需要重新登录。');
+    } catch (error) { setPasswordError(message(error)); }
+    finally { setPasswordBusy(false); }
+  }
+
   const headerActions = session ? <>
     <span className="teacher-label">教师 · {session.login}</span>
-    <Button variant="outline" className="outline-button" disabled={submitting} onClick={() => { const relogin = needsLogin; logout(); if (relogin) { setLoginError(''); setLoginOpen(true); } }}>{needsLogin ? '重新登录' : '退出'}</Button>
+    <Button variant="ghost" className="password-button" disabled={submitting || passwordBusy || needsLogin} onClick={() => { setOldPassword(''); setNewPassword(''); setNewPasswordConfirm(''); setPasswordError(''); setPasswordDialog(true); }}>修改密码</Button>
+    <Button variant="outline" className="outline-button" disabled={submitting || passwordBusy} onClick={() => { const relogin = needsLogin; logout(); if (relogin) { setLoginError(''); setLoginOpen(true); } }}>{needsLogin ? '重新登录' : '退出'}</Button>
   </> : <>
     <Button variant="ghost" className="icon-button" aria-label="刷新已发布课堂" title="刷新" disabled={loading} onClick={() => void refreshPublic()}><RefreshCw size={17} className={loading ? 'spin' : ''}/></Button>
     <Button variant="outline" className="outline-button" onClick={() => { setLoginError(''); setTokenInput(''); setLoginOpen(true); }}><LockKeyhole size={15}/> 教师登录</Button>
   </>;
   const status = session ? <>
     <output className="publication-bar">
-      {submitting || deployment ? <LoaderCircle size={16} className="spin"/> : <CloudUpload size={16}/>}
+      {submitting ? <LoaderCircle size={16} className="spin"/> : <CloudUpload size={16}/>}
       <span>{publishStatus || (dirty ? '本机草稿 · 尚未发布' : '已载入已发布版本')}{publishStatus && dirty ? ' · 另有草稿修改待发布' : ''}</span>
-      {!!publishStatus && <a href={ACTIONS_URL} target="_blank" rel="noreferrer">部署状态</a>}
     </output>
     {draftWarning && <p className="error-banner" role="alert">{draftWarning}</p>}
-    {publishError && <p className="error-banner" role="alert">{publishError} <a href={ACTIONS_URL} target="_blank" rel="noreferrer">查看部署状态</a></p>}
+    {publishError && <p className="error-banner" role="alert">{publishError}</p>}
   </> : <>
     <div className="publication-bar"><LockKeyhole size={16}/><span>{legacy.classroom ? '历史分享快照' : published?.publishedAt ? `只读 · 更新于 ${formatTime(published.publishedAt)}` : '尚未发布课堂'}</span>{legacy.classroom && <a href="./">查看最新课堂</a>}</div>
     {legacy.error && <p className="error-banner" role="alert">{legacy.error}</p>}
@@ -158,25 +160,33 @@ export default function App() {
 
   const viewState = session && initialDraft ? initialDraft : legacy.classroom ?? published?.classroom ?? emptyClassroom();
   return <>
-    {session || published || legacy.classroom ? <Home key={session ? `teacher-${editKey}` : `public-${legacy.classroom ? 'snapshot' : published?.publicationId ?? 'empty'}`} initialState={viewState} readOnly={!session} headerActions={headerActions} status={status} onDraftChange={onDraftChange} onPublish={setPublishTarget} publishing={submitting || !!deployment || needsLogin}/> : <div className="app-shell">
+    {session || published || legacy.classroom ? <Home key={session ? `teacher-${editKey}` : `public-${legacy.classroom ? 'snapshot' : published?.publicationId ?? 'empty'}`} initialState={viewState} readOnly={!session} headerActions={headerActions} status={status} onDraftChange={onDraftChange} onPublish={setPublishTarget} publishing={submitting || passwordBusy || needsLogin}/> : <div className="app-shell">
       <header className="site-header"><a className="brand" href="./"><span className="brand-mark"><Shuffle size={23}/></span><h1>几何深度学习</h1></a><div className="header-actions">{headerActions}</div></header>
       <main className="workspace"><div className="public-loading">{loading ? <><LoaderCircle size={26} className="spin"/><span>正在读取课堂…</span></> : <><p className="inline-error" role="alert">{loadError}</p><Button variant="outline" onClick={() => void refreshPublic()}>重新读取</Button></>}</div></main>
     </div>}
 
-    <Dialog open={loginOpen} onOpenChange={open => { if (!loginBusy) { setLoginOpen(open); if (!open) setTokenInput(''); } }}><DialogContent className="standard-dialog">
-      <DialogTitle>教师登录</DialogTitle>
-      <DialogDescription>使用 ly633 的 GitHub 访问令牌。</DialogDescription>
-      <ol className="login-steps">
-        <li><a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noreferrer">创建 Fine-grained token</a>，选择仅授权 <b>GDL</b> 仓库。</li>
-        <li>Repository permissions → <b>Contents: Read and write</b>。</li>
-        <li>生成后粘贴到下方。</li>
-      </ol>
+    <Dialog open={loginOpen} onOpenChange={open => { if (!loginBusy) { setLoginOpen(open); if (!open) { setTokenInput(''); setPasswordConfirm(''); } } }}><DialogContent className="standard-dialog">
+      <DialogTitle>{setupToken ? '设置教师密码' : '教师登录'}</DialogTitle>
+      <DialogDescription>{setupToken ? '设置后，可在任何设备上使用此密码登录。至少 12 个字符，建议使用较长短语。' : '请输入教师密码。'}</DialogDescription>
       <form className="login-form" onSubmit={event => { event.preventDefault(); void login(); }}>
-        <label className="choice-field" htmlFor="github-token"><span>访问令牌</span><Input id="github-token" type="password" autoComplete="off" spellCheck={false} maxLength={5000} value={tokenInput} disabled={loginBusy} onChange={event => setTokenInput(event.target.value)} placeholder="github_pat_…"/></label>
+        <input type="hidden" name="username" autoComplete="username" value="ly633"/>
+        <label className="choice-field" htmlFor="teacher-password"><span>{setupToken ? '设置密码' : '密码'}</span><Input id="teacher-password" name="password" type="password" autoComplete={setupToken ? 'new-password' : 'current-password'} maxLength={72} value={tokenInput} disabled={loginBusy} onChange={event => setTokenInput(event.target.value)} placeholder="请输入教师密码"/></label>
+        {!!setupToken && <label className="choice-field" htmlFor="confirm-password"><span>再次输入密码</span><Input id="confirm-password" type="password" autoComplete="new-password" maxLength={72} value={passwordConfirm} disabled={loginBusy} onChange={event => setPasswordConfirm(event.target.value)}/></label>}
         {loginError && <p className="inline-error" role="alert">{loginError}</p>}
-        <Button type="submit" className="primary-button" disabled={loginBusy || !tokenInput.trim()}>{loginBusy ? <LoaderCircle size={16} className="spin"/> : <LockKeyhole size={16}/>} {loginBusy ? '正在验证…' : '登录'}</Button>
+        <Button type="submit" className="primary-button" disabled={loginBusy || !tokenInput}>{loginBusy ? <LoaderCircle size={16} className="spin"/> : <LockKeyhole size={16}/>} {loginBusy ? '正在验证…' : setupToken ? '设置并登录' : '登录'}</Button>
       </form>
-      <p className="small-help">令牌仅在当前页面内存中使用，刷新后需重新登录。编辑内容先保存为本机草稿，点击发布后才对外更新。</p>
+      {!!setupToken && <p className="small-help">此设置入口仅供你使用，完成设置后自动失效。</p>}
+    </DialogContent></Dialog>
+
+    <Dialog open={passwordDialog} onOpenChange={open => { if (!passwordBusy) { setPasswordDialog(open); if (!open) { setOldPassword(''); setNewPassword(''); setNewPasswordConfirm(''); } } }}><DialogContent className="standard-dialog">
+      <DialogTitle>修改教师密码</DialogTitle><DialogDescription>新密码至少 12 个字符。修改后，其他设备需要重新登录。</DialogDescription>
+      <form className="login-form" onSubmit={event => { event.preventDefault(); void updatePassword(); }}>
+        <label className="choice-field" htmlFor="old-password"><span>当前密码</span><Input id="old-password" type="password" autoComplete="current-password" maxLength={72} value={oldPassword} onChange={event => setOldPassword(event.target.value)} disabled={passwordBusy}/></label>
+        <label className="choice-field" htmlFor="new-password"><span>新密码</span><Input id="new-password" type="password" autoComplete="new-password" maxLength={72} value={newPassword} onChange={event => setNewPassword(event.target.value)} disabled={passwordBusy}/></label>
+        <label className="choice-field" htmlFor="new-password-confirm"><span>再次输入新密码</span><Input id="new-password-confirm" type="password" autoComplete="new-password" maxLength={72} value={newPasswordConfirm} onChange={event => setNewPasswordConfirm(event.target.value)} disabled={passwordBusy}/></label>
+        {passwordError && <p className="inline-error" role="alert">{passwordError}</p>}
+        <Button className="primary-button" type="submit" disabled={passwordBusy || !oldPassword || !newPassword || !newPasswordConfirm}>{passwordBusy ? '正在保存…' : '保存密码'}</Button>
+      </form>
     </DialogContent></Dialog>
 
     <Dialog open={!!draftChoice} onOpenChange={open => { if (!open) { setDraftChoice(null); pendingSession.current = null; } }}><DialogContent className="standard-dialog">
@@ -189,7 +199,7 @@ export default function App() {
 
     <AlertDialog open={!!publishTarget} onOpenChange={open => { if (!open) setPublishTarget(null); }}><AlertDialogContent>
       <AlertDialogTitle>发布当前课堂？</AlertDialogTitle>
-      <AlertDialogDescription>将公开 {publishTarget?.students.length} 位同学的姓名、学号、分组及全部 {publishTarget?.assignments.length} 次作业成绩。部署完成后，所有人刷新同一网址即可查看。</AlertDialogDescription>
+      <AlertDialogDescription>将公开 {publishTarget?.students.length} 位同学的姓名、学号、分组及全部 {publishTarget?.assignments.length} 次作业成绩。发布后，所有人刷新同一网址即可查看。</AlertDialogDescription>
       <AlertDialogFooter><AlertDialogCancel>取消</AlertDialogCancel><AlertDialogAction onClick={() => { if (publishTarget) void publish(publishTarget); }}><Check size={16}/> 确认发布</AlertDialogAction></AlertDialogFooter>
     </AlertDialogContent></AlertDialog>
   </>;
