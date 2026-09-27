@@ -7,7 +7,6 @@ import { AlertDialog, AlertDialogContent, AlertDialogTitle, AlertDialogDescripti
 import { decodeSnapshot, emptyClassroom, type Classroom } from '@/lib/classroom';
 import { authenticateTeacher, changeTeacherPassword, chooseTeacherDraft, endTeacherSession, fetchPublishedClassroom, publicClassroom, publishClassroom, PublishingError, saveTeacherDraft, setupTeacherPassword, type DraftChoice, type Publication, type TeacherSession } from '@/lib/publishing';
 import Home from './page';
-import { StudentSubmission, TeacherSubmissions } from './submissions';
 
 function message(error: unknown) { return error instanceof Error ? error.message : '操作未完成，请重试。'; }
 function formatTime(value: string | null) { return value ? new Date(value).toLocaleString('zh-CN', { hour12: false }) : ''; }
@@ -18,8 +17,6 @@ function readLegacyLink() {
 }
 
 export default function App() {
-  const [view] = useState(() => new URLSearchParams(window.location.search).get('view'));
-  const submissionView = view === 'submit' || view === 'submissions';
   const [legacy] = useState(readLegacyLink);
   const [published, setPublished] = useState<Publication | null>(null);
   const [loading, setLoading] = useState(true);
@@ -94,7 +91,6 @@ export default function App() {
     try {
       const verified = setupToken ? await setupTeacherPassword(entered, setupToken) : await authenticateTeacher(entered);
       setSetupToken('');
-      if (submissionView) { setSession(verified); setLoginOpen(false); return; }
       let choice: DraftChoice;
       try { choice = chooseTeacherDraft(verified.published, verified.sha, localStorage); }
       catch { choice = { draft: verified.published.classroom ?? emptyClassroom(), conflict: false, warning: '无法读取本机草稿，请及时导出 Excel。' }; }
@@ -146,7 +142,7 @@ export default function App() {
     <Button variant="ghost" className="password-button" disabled={submitting || passwordBusy || needsLogin} onClick={() => { setOldPassword(''); setNewPassword(''); setNewPasswordConfirm(''); setPasswordError(''); setPasswordDialog(true); }}>修改密码</Button>
     <Button variant="outline" className="outline-button" disabled={submitting || passwordBusy} onClick={() => { const relogin = needsLogin; logout(); if (relogin) { setLoginError(''); setLoginOpen(true); } }}>{needsLogin ? '重新登录' : '退出'}</Button>
   </> : <>
-    {!submissionView && <Button variant="ghost" className="icon-button" aria-label="刷新已发布课堂" title="刷新" disabled={loading} onClick={() => void refreshPublic()}><RefreshCw size={17} className={loading ? 'spin' : ''}/></Button>}
+    <Button variant="ghost" className="icon-button" aria-label="刷新已发布课堂" title="刷新" disabled={loading} onClick={() => void refreshPublic()}><RefreshCw size={17} className={loading ? 'spin' : ''}/></Button>
     <Button variant="outline" className="outline-button" onClick={() => { setLoginError(''); setTokenInput(''); setLoginOpen(true); }}><LockKeyhole size={15}/> 教师登录</Button>
   </>;
   const status = session ? <>
@@ -164,7 +160,7 @@ export default function App() {
 
   const viewState = session && initialDraft ? initialDraft : legacy.classroom ?? published?.classroom ?? emptyClassroom();
   return <>
-    {submissionView ? <div className="app-shell"><header className="site-header"><a className="brand" href="./"><span className="brand-mark"><Shuffle size={23}/></span><h1>几何深度学习</h1></a><div className="header-actions"><a className="submission-nav" href="./">课堂</a><a className="submission-nav" href="?view=submit" aria-current={view === 'submit' ? 'page' : undefined}>学生提交</a><a className="submission-nav" href="?view=submissions" aria-current={view === 'submissions' ? 'page' : undefined}>提交记录</a>{headerActions}</div></header>{view === 'submit' ? <StudentSubmission/> : <TeacherSubmissions session={session} onLogin={() => { setLoginError(''); setTokenInput(''); setLoginOpen(true); }}/>}</div> : session || published || legacy.classroom ? <Home key={session ? `teacher-${editKey}` : `public-${legacy.classroom ? 'snapshot' : published?.publicationId ?? 'empty'}`} initialState={viewState} readOnly={!session} headerActions={<><a className="submission-nav" href="?view=submit">学生提交</a><a className="submission-nav" href="?view=submissions">提交记录</a>{headerActions}</>} status={status} onDraftChange={onDraftChange} onPublish={setPublishTarget} publishing={submitting || passwordBusy || needsLogin}/> : <div className="app-shell">
+    {session || published || legacy.classroom ? <Home key={session ? `teacher-${editKey}` : `public-${legacy.classroom ? 'snapshot' : published?.publicationId ?? 'empty'}`} initialState={viewState} readOnly={!session} headerActions={headerActions} status={status} onDraftChange={onDraftChange} onPublish={setPublishTarget} publishing={submitting || passwordBusy || needsLogin}/> : <div className="app-shell">
       <header className="site-header"><a className="brand" href="./"><span className="brand-mark"><Shuffle size={23}/></span><h1>几何深度学习</h1></a><div className="header-actions">{headerActions}</div></header>
       <main className="workspace"><div className="public-loading">{loading ? <><LoaderCircle size={26} className="spin"/><span>正在读取课堂…</span></> : <><p className="inline-error" role="alert">{loadError}</p><Button variant="outline" onClick={() => void refreshPublic()}>重新读取</Button></>}</div></main>
     </div>}

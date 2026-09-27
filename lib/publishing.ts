@@ -3,7 +3,7 @@ import { emptyClassroom, STORAGE_KEY, validateClassroom, type Classroom } from '
 export const TEACHER_LOGIN = 'ly633';
 export const DRAFT_BASE_KEY = 'classroom-teams-draft-base-v1';
 export const MAX_PUBLIC_BYTES = 900000;
-export const API_BASE = import.meta.env?.VITE_CLASSROOM_API_BASE || 'https://gdl-teacher-ly633.golden-whale-7483.chatgpt.site/api';
+export const API_BASE = 'https://gdl-teacher-ly633.golden-whale-7483.chatgpt.site/api';
 type Fetcher = typeof fetch;
 export type Publication = { version: 1; publicationId: string | null; publishedAt: string | null; classroom: Classroom | null };
 export type TeacherSession = { token: string; login: string; sha: string; published: Publication; expiresAt: string };
